@@ -1,0 +1,279 @@
+//Необходимо разработать программу, которая моделирует работу торговой площадки. На площадке представлены различные товары, 
+//которые продавцы добавляют в продажу. Покупатели могут выбирать и приобретать товары, используя различные методы оплаты.
+//Каждый из участников (покупатели и продавцы) взаимодействует с системой через свои классы.
+#include <iostream>
+#include <vector>
+#include <string>
+#include <memory>
+#include <iomanip>
+#include <fstream>
+#include <ctime>
+
+// Forward declarations
+class PaymentStrategy;
+
+class Product {
+public:
+    Product(const std::string& name, double price, int quantity, int sellerId)
+        : name(name), price(price), quantity(quantity), sellerId(sellerId) {}
+
+    const std::string& getName() const { return name; }
+    double getPrice() const { return price; }
+    int getQuantity() const { return quantity; }
+    int getSellerId() const { return sellerId; }
+
+    bool purchase(int quantity) {
+        if (this->quantity >= quantity) {
+            this->quantity -= quantity;
+            return true;
+        }
+        return false;
+    }
+
+    void display() const {
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << name << " | Price: " << price << " | Quantity: " << quantity << "\n";
+    }
+
+private:
+    std::string name;
+    double price;
+    int quantity;
+    int sellerId;
+};
+
+class Seller {
+public:
+    Seller(const std::string& name, int id) : name(name), id(id) {}
+
+    void addProduct(const std::string& productName, double price, int quantity, std::vector<Product>& marketplaceProducts) {
+        marketplaceProducts.emplace_back(productName, price, quantity, id);
+    }
+
+    const std::string& getName() const { return name; }
+
+private:
+    std::string name;
+    int id;
+};
+
+class PaymentStrategy {
+public:
+    virtual ~PaymentStrategy() = default;
+    virtual bool pay(double amount, double& balance) = 0;
+    virtual std::string getMethod() const = 0;
+};
+
+class CashPayment : public PaymentStrategy {
+public:
+    bool pay(double amount, double& balance) override {
+        if (balance >= amount) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+    std::string getMethod() const override { return "Cash"; }
+};
+
+class CardPayment : public PaymentStrategy {
+public:
+    bool pay(double amount, double& balance) override {
+        if (balance >= amount) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+    std::string getMethod() const override { return "Card"; }
+};
+
+class CryptoPayment : public PaymentStrategy {
+public:
+    bool pay(double amount, double& balance) override {
+        if (balance >= amount) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+    std::string getMethod() const override { return "Crypto"; }
+};
+
+class Customer {
+public:
+    Customer(const std::string& name, double balance) : name(name), balance(balance) {}
+
+    void setPaymentMethod(std::unique_ptr<PaymentStrategy> strategy) {
+        paymentMethod = std::move(strategy);
+    }
+
+    bool purchaseProduct(Product& product, int quantity) {
+        double totalCost = product.getPrice() * quantity;
+        if (paymentMethod && product.purchase(quantity)) {
+            if (paymentMethod->pay(totalCost, balance)) {
+                generateReceipt(product, quantity, totalCost);
+                return true;
+            } else {
+                product.purchase(-quantity); // Revert stock reduction
+            }
+        }
+        return false;
+    }
+
+    void displayBalance() const {
+        std::cout << name << "'s Balance: " << balance << "\n";
+    }
+
+private:
+    void generateReceipt(const Product& product, int quantity, double totalCost) const {
+        // Создание имени файла
+        std::string filename = "receipt_" + std::to_string(std::time(nullptr)) + ".txt";
+        std::ofstream receiptFile(filename);
+
+        if (receiptFile.is_open()) {
+            receiptFile << "--- Receipt ---\n"
+                        << "Product: " << product.getName() << "\n"
+                        << "Quantity: " << quantity << "\n"
+                        << "Total Cost: " << totalCost << "\n"
+                        << "Payment Method: " << paymentMethod->getMethod() << "\n"
+                        << "Remaining Balance: " << balance << "\n";
+            receiptFile.close();
+            std::cout << "Receipt saved to " << filename << "\n";
+        } else {
+            std::cerr << "Failed to create receipt file.\n";
+        }
+    }
+
+    std::string name;
+    double balance;
+    std::unique_ptr<PaymentStrategy> paymentMethod;
+};
+
+class Marketplace {
+public:
+    void addSeller(const std::string& name) {
+        sellers.emplace_back(name, nextSellerId++);
+    }
+
+    void addCustomer(const std::string& name, double balance) {
+        customers.emplace_back(name, balance);
+    }
+
+    Seller& getSeller(int id) {
+        return sellers[id];
+    }
+
+    Customer& getCustomer(int id) {
+        return customers[id];
+    }
+
+    void listProducts() const {
+        std::cout << "\n--- Products Available ---\n";
+        for (const auto& product : products) {
+            product.display();
+        }
+    }
+
+    std::vector<Product>& getProducts() { return products; }
+
+private:
+    std::vector<Seller> sellers;
+    std::vector<Customer> customers;
+    std::vector<Product> products;
+    int nextSellerId = 0;
+};
+
+int main() {
+    Marketplace marketplace;
+    int choice;
+
+    while (true) {
+        std::cout << "\n--- Marketplace Menu ---\n"
+                  << "1. Add Seller\n"
+                  << "2. Add Customer\n"
+                  << "3. Add Product\n"
+                  << "4. List Products\n"
+                  << "5. Purchase Product\n"
+                  << "6. Exit\n"
+                  << "Enter your choice: ";
+        std::cin >> choice;
+
+        if (choice == 6) break;
+
+        switch (choice) {
+        case 1: {
+            std::string sellerName;
+            std::cout << "Enter seller name: ";
+            std::cin >> sellerName;
+            marketplace.addSeller(sellerName);
+            break;
+        }
+        case 2: {
+            std::string customerName;
+            double balance;
+            std::cout << "Enter customer name: ";
+            std::cin >> customerName;
+            std::cout << "Enter initial balance: ";
+            std::cin >> balance;
+            marketplace.addCustomer(customerName, balance);
+            break;
+        }
+        case 3: {
+            int sellerId;
+            std::string productName;
+            double price;
+            int quantity;
+            std::cout << "Enter seller ID: ";
+            std::cin >> sellerId;
+            std::cout << "Enter product name: ";
+            std::cin >> productName;
+            std::cout << "Enter price: ";
+            std::cin >> price;
+            std::cout << "Enter quantity: ";
+            std::cin >> quantity;
+            marketplace.getSeller(sellerId).addProduct(productName, price, quantity, marketplace.getProducts());
+            break;
+        }
+        case 4: {
+            marketplace.listProducts();
+            break;
+        }
+        case 5: {
+            int customerId, productId, quantity;
+            int paymentMethod;
+
+            std::cout << "Enter customer ID: ";
+            std::cin >> customerId;
+            std::cout << "Enter product ID: ";
+            std::cin >> productId;
+            std::cout << "Enter quantity: ";
+            std::cin >> quantity;
+            std::cout << "Choose payment method (1-Cash, 2-Card, 3-Crypto): ";
+            std::cin >> paymentMethod;
+
+            Customer& customer = marketplace.getCustomer(customerId);
+            if (paymentMethod == 1) {
+                customer.setPaymentMethod(std::make_unique<CashPayment>());
+            } else if (paymentMethod == 2) {
+                customer.setPaymentMethod(std::make_unique<CardPayment>());
+            } else if (paymentMethod == 3) {
+                customer.setPaymentMethod(std::make_unique<CryptoPayment>());
+            } else {
+                std::cout << "Invalid payment method!\n";
+                break;
+            }
+
+            if (!customer.purchaseProduct(marketplace.getProducts()[productId], quantity)) {
+                std::cout << "Purchase failed. Check balance or product availability.\n";
+            }
+
+            break;
+        }
+        default:
+            std::cout << "Invalid choice. Try again.\n";
+        }
+    }
+
+    return 0;
+}
